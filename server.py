@@ -1,3 +1,4 @@
+# ======== server.py ========
 from socket import *
 import socket
 import json
@@ -43,19 +44,19 @@ def proses(command_str):
         elif cmd == "play":
             player_id = parts[1]
             card_index = int(parts[2])
+            new_color = parts[3] if len(parts) > 3 else None
             with game_lock:
-                result = game.play_card(player_id, card_index)
+                result = game.play_card(player_id, card_index, new_color)
             return json.dumps({"status": "OK", "result": result})
 
         elif cmd == "draw":
             player_id = parts[1]
             with game_lock:
-                player = game.get_player(player_id)
-                if player:
-                    player.draw_card(game.deck)
-                    return json.dumps({"status": "OK", "message": "Card drawn"})
+                result = game.draw_or_pass(player_id)
+                if result in ["Not your turn", "You have already drawn a card this turn"]:
+                    return json.dumps({"status": "ERROR", "message": result})
                 else:
-                    return json.dumps({"status": "ERROR", "message": "Player not found"})
+                    return json.dumps({"status": "OK", "message": result})
 
         else:
             return json.dumps({"status": "ERROR", "message": "Unknown command"})
