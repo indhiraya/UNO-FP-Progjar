@@ -1,4 +1,4 @@
-# ======== server.py ========
+# server.py
 from socket import *
 import socket
 import json
@@ -31,14 +31,16 @@ def proses(command_str):
             return json.dumps({
                 "status": "OK",
                 "hand": player.get_hand(),
-                "your_turn": (player_id == game.get_current_player())
+                "your_turn": (player_id == game.get_current_player_id())
             })
 
         elif cmd == "top_card":
             return json.dumps({
                 "status": "OK",
                 "top_card": str(game.top_card),
-                "current_turn": game.get_current_player()
+                "current_turn": game.get_current_player_id(),
+                # BARU: Kirim pesan status tambahan dari game logic
+                "last_status": game.last_status_message
             })
 
         elif cmd == "play":
@@ -52,23 +54,24 @@ def proses(command_str):
         elif cmd == "draw":
             player_id = parts[1]
             with game_lock:
-                result = game.draw_or_pass(player_id)
-                if result in ["Not your turn", "You have already drawn a card this turn"]:
-                    return json.dumps({"status": "ERROR", "message": result})
-                else:
-                    return json.dumps({"status": "OK", "message": result})
+                result = game.draw_card_action(player_id)
+            return json.dumps({"status": "OK", "message": result})
         
+        # BARU: Perintah untuk menyatakan UNO
+        elif cmd == "uno":
+            player_id = parts[1]
+            with game_lock:
+                response = game.declare_uno(player_id)
+            return json.dumps(response)
+
+        # BARU: Perintah untuk mendapatkan status semua pemain (jumlah kartu)
         elif cmd == "status":
             with game_lock:
-                summary = {
-                    pid: len(player.hand)
-                    for pid, player in game.players.items()
-                }
-            return json.dumps({"status": "OK", "players": summary})
+                player_statuses = game.get_all_player_status()
+            return json.dumps({"status": "OK", "players": player_statuses})
 
         elif cmd == "winner":
             return json.dumps({"status": "OK", "winner": game.winner})
-
 
         else:
             return json.dumps({"status": "ERROR", "message": "Unknown command"})
@@ -76,11 +79,12 @@ def proses(command_str):
     except Exception as e:
         return json.dumps({"status": "ERROR", "message": str(e)})
 
+# ... (sisa kode server.py tidak perlu diubah) ...
 def handle_client(connection, address):
     rcv = ""
     try:
         while True:
-            data = connection.recv(32)
+            data = connection.recv(4096) # Buffer diperbesar sedikit
             if data:
                 d = data.decode()
                 rcv += d
@@ -89,7 +93,7 @@ def handle_client(connection, address):
                     hasil = proses(rcv)
                     hasil = hasil + "\r\n\r\n"
                     connection.sendall(hasil.encode())
-                    logging.info(f"📤 ke {address}: {hasil.strip()}")
+                    # logging.info(f"📤 ke {address}: {hasil.strip()}") # bisa dinonaktifkan agar tidak terlalu ramai
                     break
             else:
                 break
@@ -108,11 +112,7 @@ def run_server(host='0.0.0.0', port=8889, max_workers=20):
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             while True:
                 conn, addr = my_socket.accept()
-                logging.info(f"🔗 Koneksi dari {addr}")
                 executor.submit(handle_client, conn, addr)
 
-def main():
-    run_server()
-
 if __name__ == "__main__":
-    main()
+    run_server()
