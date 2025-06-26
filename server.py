@@ -57,6 +57,18 @@ def proses(command_str):
                     return json.dumps({"status": "ERROR", "message": result})
                 else:
                     return json.dumps({"status": "OK", "message": result})
+        
+        elif cmd == "status":
+            with game_lock:
+                summary = {
+                    pid: len(player.hand)
+                    for pid, player in game.players.items()
+                }
+            return json.dumps({"status": "OK", "players": summary})
+
+        elif cmd == "winner":
+            return json.dumps({"status": "OK", "winner": game.winner})
+
 
         else:
             return json.dumps({"status": "ERROR", "message": "Unknown command"})

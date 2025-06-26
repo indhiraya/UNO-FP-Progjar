@@ -57,18 +57,16 @@ def main():
 
         if choice == "1":
             index = int(input("Index kartu yang ingin dimainkan: "))
-            # Dapatkan nama kartu yang dipilih (dari hand)
             selected_card = hand["hand"][index]
-            
-            # Cek apakah kartu adalah wild
+
             if "+4" in selected_card or "wild" in selected_card:
                 new_color = input("Pilih warna baru (red, green, blue, yellow): ").lower()
-                command = f"play {player_id} {index} {new_color}"
+                result = send_command(f"play {player_id} {index} {new_color}")
             else:
-                command = f"play {player_id} {index}"
-            
-            result = send_command(command)
+                result = send_command(f"play {player_id} {index}")
+
             print(result)
+
         elif choice == "2":
             result = send_command(f"draw {player_id}")
             print(result)

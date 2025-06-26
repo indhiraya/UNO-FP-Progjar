@@ -163,6 +163,8 @@ def name_entry_scene(screen):
 
 # --- FUNGSI UTAMA GAME (DIMODIFIKASI) ---
 def main():
+    selected_indexes = set()
+
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
     pygame.display.set_caption("UNO Multiplayer")
 
@@ -216,8 +218,12 @@ def main():
             if hand_info.get("status") == "OK":
                 hand = hand_info.get("hand", [])
                 is_my_turn = hand_info.get("your_turn", False)
+                if len(hand) == 0:
+                    status_message = "Kamu SUDAH MENANG! 🎉"
+                    is_my_turn = False  # Jangan izinkan input lagi
             else:
                 status_message = hand_info.get("message", "Gagal update tangan.")
+
             if len(hand) == 0 and top_card != "loading...":
                 status_message = "Kamu MENANG! 🎉"
 
@@ -253,6 +259,17 @@ def main():
                         status_message = result.get("message", "Error")
                         last_update_time = 0
                         # Setelah draw, giliran otomatis pindah, jadi is_my_turn akan jadi False pada polling berikutnya
+        winner_check = send_command("winner")
+        
+        if winner_check.get("winner"):
+            winner_name = winner_check["winner"]
+            if winner_name == player_id:
+                status_message = "🎉 Kamu MENANG! 🎉"
+            else:
+                status_message = f"Permainan berakhir. Pemenang: {winner_name}"
+            running = False  # keluar dari loop
+
+
 
         # 3. GAMBAR SEMUANYA
         screen.fill(BACKGROUND_COLOR)
@@ -274,6 +291,8 @@ def main():
             draw_card(screen, rect.x, rect.y, card_str, selected=is_hovered)
         pygame.display.flip()
         clock.tick(30)
+        if len(hand) == 0:
+            draw_text(screen, "🎉 KAMU MENANG! 🎉", TITLE_FONT, YELLOW, (SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 - 100))
 
     pygame.quit()
 
