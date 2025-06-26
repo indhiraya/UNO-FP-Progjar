@@ -4,39 +4,8 @@ import json
 import pygame
 import time
 
-# ... (Fungsi send_command, ask_color_choice, dan konstanta tidak berubah) ...
+# --- Bagian Komunikasi Jaringan ---
 SERVER_ADDRESS = ('localhost', 8889)
-
-def ask_color_choice(screen):
-    """Menampilkan popup untuk memilih warna jika kartu adalah +4 atau wild."""
-    overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
-    overlay.set_alpha(200)
-    overlay.fill((0, 0, 0))
-    screen.blit(overlay, (0, 0))
-
-    draw_text(screen, "Pilih Warna Baru", TITLE_FONT, WHITE, (SCREEN_WIDTH/2, SCREEN_HEIGHT/2 - 100))
-
-    button_width, button_height = 120, 60
-    colors = ["red", "green", "blue", "yellow"]
-    rects = []
-    # Posisi tombol warna di tengah
-    start_x_colors = (SCREEN_WIDTH - (len(colors) * button_width + (len(colors) - 1) * 40)) / 2
-    for i, color in enumerate(colors):
-        rect = pygame.Rect(start_x_colors + i * (button_width + 40), SCREEN_HEIGHT/2, button_width, button_height)
-        draw_button(screen, color.upper(), rect, COLOR_MAP[color], WHITE)
-        rects.append((rect, color))
-
-    pygame.display.flip()
-
-    choosing = True
-    while choosing:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                return None
-            if event.type == pygame.MOUSEBUTTONDOWN:
-                for rect, color in rects:
-                    if rect.collidepoint(event.pos):
-                        return color
 
 def send_command(command):
     try:
@@ -67,7 +36,7 @@ def send_command(command):
     except Exception as e:
         return {"status": "ERROR", "message": f"Error jaringan: {e}"}
 
-# --- Inisialisasi dan Konfigurasi Pygame (Tidak Berubah) ---
+# --- Inisialisasi dan Konfigurasi Pygame ---
 pygame.init()
 SCREEN_WIDTH, SCREEN_HEIGHT = 1000, 700
 BACKGROUND_COLOR = (7, 99, 36)
@@ -81,7 +50,8 @@ CARD_FONT = pygame.font.Font(None, 32)
 INFO_FONT = pygame.font.Font(None, 28)
 MSG_FONT = pygame.font.Font(None, 24)
 CARD_WIDTH, CARD_HEIGHT, CARD_MARGIN = 80, 120, 10
-# ... (name_entry_scene, draw_card, draw_button, draw_text tidak berubah) ...
+
+# --- Fungsi Helper Visual ---
 def draw_card(screen, x, y, card_str, selected=False):
     parts = card_str.split()
     color_str, value_str = parts[0], " ".join(parts[1:])
@@ -99,14 +69,39 @@ def draw_button(screen, text, rect, color, text_color, font=BUTTON_FONT):
     screen.blit(text_surf, text_surf.get_rect(center=rect.center))
     return rect
 
-def draw_text(screen, text, font, color, center_pos, align="center"):
+def draw_text(screen, text, font, color, pos, align="center"):
     text_surf = font.render(text, True, color)
     text_rect = text_surf.get_rect()
     if align == "center":
-        text_rect.center = center_pos
+        text_rect.center = pos
     elif align == "topleft":
-        text_rect.topleft = center_pos
+        text_rect.topleft = pos
+    elif align == "topright":
+        text_rect.topright = pos
     screen.blit(text_surf, text_rect)
+
+def ask_color_choice(screen):
+    overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+    overlay.set_alpha(200)
+    overlay.fill((0, 0, 0))
+    screen.blit(overlay, (0, 0))
+    draw_text(screen, "Pilih Warna Baru", TITLE_FONT, WHITE, (SCREEN_WIDTH/2, SCREEN_HEIGHT/2 - 100))
+    button_width, button_height = 120, 60
+    colors = ["red", "green", "blue", "yellow"]
+    rects = []
+    start_x_colors = (SCREEN_WIDTH - (len(colors) * button_width + (len(colors) - 1) * 40)) / 2
+    for i, color in enumerate(colors):
+        rect = pygame.Rect(start_x_colors + i * (button_width + 40), SCREEN_HEIGHT/2, button_width, button_height)
+        draw_button(screen, color.upper(), rect, COLOR_MAP[color], WHITE)
+        rects.append((rect, color))
+    pygame.display.flip()
+    choosing = True
+    while choosing:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT: return None
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                for rect, color in rects:
+                    if rect.collidepoint(event.pos): return color
 
 def name_entry_scene(screen):
     player_name = ""
@@ -119,8 +114,7 @@ def name_entry_scene(screen):
     clock = pygame.time.Clock()
     while True:
         for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                return None
+            if event.type == pygame.QUIT: return None
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if input_box.collidepoint(event.pos):
                     active = not active
@@ -131,13 +125,10 @@ def name_entry_scene(screen):
                     return player_name
             if event.type == pygame.KEYDOWN:
                 if active:
-                    if event.key == pygame.K_RETURN and len(player_name) > 0:
-                        return player_name
-                    elif event.key == pygame.K_BACKSPACE:
-                        player_name = player_name[:-1]
+                    if event.key == pygame.K_RETURN and len(player_name) > 0: return player_name
+                    elif event.key == pygame.K_BACKSPACE: player_name = player_name[:-1]
                     else:
-                        if len(player_name) < 15:
-                            player_name += event.unicode
+                        if len(player_name) < 15: player_name += event.unicode
         screen.fill(BACKGROUND_COLOR)
         draw_text(screen, "UNO MULTIPLAYER", TITLE_FONT, WHITE, (SCREEN_WIDTH/2, SCREEN_HEIGHT/4))
         draw_text(screen, "Masukkan Nama Pemain:", INFO_FONT, WHITE, (SCREEN_WIDTH/2, SCREEN_HEIGHT/2 - 70))
@@ -151,90 +142,90 @@ def name_entry_scene(screen):
         clock.tick(30)
 
 
-# --- FUNGSI UTAMA GAME ---
+# --- FUNGSI UTAMA GAME (REVISI STRUKTUR LOOP) ---
 def main():
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
     pygame.display.set_caption("UNO Multiplayer")
-
     player_id = name_entry_scene(screen)
-    if not player_id:
-        pygame.quit()
-        return
-
-    screen.fill(BACKGROUND_COLOR)
-    draw_text(screen, f"Joining as {player_id}...", INPUT_FONT, WHITE, (SCREEN_WIDTH/2, SCREEN_HEIGHT/2))
-    pygame.display.flip()
-
-    join_response = send_command(f"join {player_id}")
-    if join_response.get("status") != "OK":
-        # ... (error handling tidak berubah) ...
-        return
+    if not player_id: pygame.quit(); return
     
     # Inisialisasi variabel game
-    hand, top_card, current_turn = [], "loading...", "loading..."
+    hand, top_card, current_turn, winner = [], "loading...", "loading...", None
     is_my_turn = False
     status_message = f"Selamat datang, {player_id}!"
-    last_game_status_message = ""
-    # BARU: Variabel untuk menyimpan jumlah kartu lawan
-    opponent_cards = {}
-
-    # Definisi Rect Tombol
+    player_statuses = {}
+    
+    # Tombol
     draw_button_rect = pygame.Rect(SCREEN_WIDTH - 220, SCREEN_HEIGHT / 2, 180, 50)
-    # BARU: Tombol UNO!
     uno_button_rect = pygame.Rect(SCREEN_WIDTH - 220, SCREEN_HEIGHT / 2 - 70, 180, 50)
+    callout_buttons = []
 
-    last_update_time, UPDATE_INTERVAL = 0, 1000 # Update lebih cepat
-    hand_card_rects = []
-    clock = pygame.time.Clock()
-    running = True
-    scroll_x = 0
-    winner = None
-
-    arrow_button_y = SCREEN_HEIGHT - 170 + (CARD_HEIGHT // 2) - 20
-    left_arrow_rect = pygame.Rect(10, arrow_button_y, 40, 40)
-    right_arrow_rect = pygame.Rect(SCREEN_WIDTH - 50, arrow_button_y, 40, 40)
+    last_update_time, UPDATE_INTERVAL = 0, 1500
+    hand_card_rects, clock, running, scroll_x = [], pygame.time.Clock(), True, 0
+    left_arrow_rect = pygame.Rect(10, SCREEN_HEIGHT - 170 + 40, 40, 40)
+    right_arrow_rect = pygame.Rect(SCREEN_WIDTH - 50, SCREEN_HEIGHT - 170 + 40, 40, 40)
+    
+    def update_local_state(new_state):
+        nonlocal hand, top_card, current_turn, winner, is_my_turn, status_message, player_statuses
+        if new_state and new_state.get("status") == "OK":
+            hand = new_state.get("hand", [])
+            top_card = new_state.get("top_card", "Error")
+            current_turn = new_state.get("current_turn", "Error")
+            winner = new_state.get("winner")
+            is_my_turn = new_state.get("your_turn", False)
+            player_statuses = new_state.get("player_statuses", {})
+            server_msg = new_state.get("last_action_message")
+            if server_msg: status_message = server_msg
+    
+    initial_state = send_command(f"join {player_id}")
+    update_local_state(initial_state)
 
     while running:
-        # 1. UPDATE STATE DARI SERVER
+        # 1. UPDATE STATE DARI SERVER (saat idle)
         current_time = pygame.time.get_ticks()
-        if not winner and current_time - last_update_time > UPDATE_INTERVAL:
+        if not is_my_turn and not winner and current_time - last_update_time > UPDATE_INTERVAL:
             last_update_time = current_time
-            
-            # Ambil info kartu teratas dan status game
-            top_card_info = send_command("top_card")
-            if top_card_info.get("status") == "OK":
-                top_card = top_card_info.get("top_card", "Error")
-                current_turn = top_card_info.get("current_turn", "Error")
-                # BARU: Ambil pesan status dari server
-                game_status = top_card_info.get("last_status", "")
-                if game_status and game_status != last_game_status_message:
-                    status_message = game_status
-                    last_game_status_message = game_status
+            response = send_command(f"get_state {player_id}")
+            update_local_state(response)
 
-            # Ambil info tangan
-            hand_info = send_command(f"hand {player_id}")
-            if hand_info.get("status") == "OK":
-                hand = hand_info.get("hand", [])
-                is_my_turn = hand_info.get("your_turn", False)
-
-            # BARU: Ambil info jumlah kartu semua pemain
-            status_info = send_command("status")
-            if status_info.get("status") == "OK":
-                opponent_cards = status_info.get("players", {})
-
-            # Cek pemenang
-            winner_check = send_command("winner")
-            if winner_check.get("winner"):
-                winner = winner_check["winner"]
-                if winner == player_id:
-                    status_message = "🎉 Kamu MENANG! 🎉"
-                else:
-                    status_message = f"Pemenang: {winner}"
-                is_my_turn = False
-
-        # 2. PROSES INPUT
+        # 2. PROSES INPUT EVENT
         mouse_pos = pygame.mouse.get_pos()
-        # ... (logika posisi kartu dinamis tidak berubah) ...
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT: running = False
+            if event.type == pygame.MOUSEWHEEL: scroll_x -= event.y * 40
+
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                def send_and_update(command):
+                    response = send_command(command)
+                    update_local_state(response)
+
+                if left_arrow_rect.collidepoint(mouse_pos): scroll_x -= 60
+                elif right_arrow_rect.collidepoint(mouse_pos): scroll_x += 60
+
+                if uno_button_rect.collidepoint(mouse_pos):
+                    my_status = player_statuses.get(player_id, {})
+                    if my_status.get("count") == 1 and my_status.get("on_uno"):
+                        send_and_update(f"uno {player_id}")
+
+                for rect, target_id in callout_buttons:
+                    if rect.collidepoint(mouse_pos):
+                        send_and_update(f"callout {player_id} {target_id}")
+                        break
+                
+                if is_my_turn and not winner:
+                    for i, rect in enumerate(hand_card_rects):
+                        if rect.collidepoint(mouse_pos):
+                            selected_card = hand[i]
+                            if "wild" in selected_card.lower() or "+4" in selected_card:
+                                chosen_color = ask_color_choice(screen)
+                                if chosen_color: send_and_update(f"play {player_id} {i} {chosen_color}")
+                            else: send_and_update(f"play {player_id} {i}")
+                            break
+                    if draw_button_rect.collidepoint(mouse_pos):
+                        send_and_update(f"draw {player_id}")
+        
+        # 3. UPDATE LOGIKA UI (SETELAH SEMUA INPUT DIPROSES)
+        # Blok ini dipindahkan ke sini untuk mencegah IndexError
         hand_card_rects.clear()
         total_hand_width = len(hand) * (CARD_WIDTH + CARD_MARGIN) - CARD_MARGIN
         hand_area_margin = 70 
@@ -244,97 +235,66 @@ def main():
             scroll_x = 0
         else:
             hand_render_start_x = hand_area_margin
+        
         for i in range(len(hand)):
             card_pos_x = hand_render_start_x + i * (CARD_WIDTH + CARD_MARGIN) - scroll_x
             rect = pygame.Rect(card_pos_x, SCREEN_HEIGHT - 170, CARD_WIDTH, CARD_HEIGHT)
             hand_card_rects.append(rect)
-
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT: running = False
-            if event.type == pygame.MOUSEWHEEL: scroll_x -= event.y * 40
-
-            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                # Klik tombol scroll
-                if left_arrow_rect.collidepoint(mouse_pos): scroll_x -= 60
-                elif right_arrow_rect.collidepoint(mouse_pos): scroll_x += 60
-
-                # BARU: Klik tombol UNO!
-                if len(hand) == 1 and uno_button_rect.collidepoint(mouse_pos):
-                    response = send_command(f"uno {player_id}")
-                    status_message = response.get("message", "Error")
-
-                if is_my_turn and not winner:
-                    # Klik kartu
-                    for i, rect in enumerate(hand_card_rects):
-                        if rect.collidepoint(mouse_pos):
-                            selected_card = hand[i]
-                            if "wild" in selected_card.lower() or "+4" in selected_card:
-                                chosen_color = ask_color_choice(screen)
-                                if chosen_color:
-                                    result = send_command(f"play {player_id} {i} {chosen_color}")
-                                    status_message = result.get("result") or result.get("message", "Error")
-                                    last_update_time = 0
-                            else:
-                                result = send_command(f"play {player_id} {i}")
-                                status_message = result.get("result") or result.get("message", "Error")
-                                last_update_time = 0
-                            break
-                    # Klik tombol Ambil Kartu
-                    if draw_button_rect.collidepoint(mouse_pos):
-                        result = send_command(f"draw {player_id}")
-                        status_message = result.get("message", "Error")
-                        last_update_time = 0
         
         max_scroll = max(0, total_hand_width - visible_width)
         scroll_x = max(0, min(scroll_x, max_scroll))
 
-        # 3. GAMBAR SEMUANYA
+        # 4. GAMBAR SEMUANYA KE LAYAR
         screen.fill(BACKGROUND_COLOR)
         
-        # Gambar info utama
         draw_text(screen, "Kartu Teratas", INFO_FONT, WHITE, (SCREEN_WIDTH / 2, 50))
-        if top_card != "loading...":
-            draw_card(screen, SCREEN_WIDTH / 2 - CARD_WIDTH / 2, 80, top_card)
+        if top_card != "loading...": draw_card(screen, SCREEN_WIDTH / 2 - CARD_WIDTH / 2, 80, top_card)
         turn_text = f"Giliran: {current_turn}"
         turn_color = YELLOW if is_my_turn else WHITE
         draw_text(screen, turn_text, INPUT_FONT, turn_color, (SCREEN_WIDTH / 2, 250))
-        if is_my_turn and not winner:
-            draw_text(screen, "GILIRAN ANDA!", INPUT_FONT, YELLOW, (SCREEN_WIDTH / 2, 290))
+        if is_my_turn and not winner: draw_text(screen, "GILIRAN ANDA!", INPUT_FONT, YELLOW, (SCREEN_WIDTH / 2, 290))
         draw_text(screen, status_message, MSG_FONT, GRAY, (SCREEN_WIDTH / 2, 350))
 
-        # Gambar kartu di tangan
         draw_text(screen, "Kartu Anda", INFO_FONT, WHITE, (SCREEN_WIDTH / 2, SCREEN_HEIGHT - 200))
         for i, card_str in enumerate(hand):
-            # ... (logika render kartu tidak berubah) ...
             rect = hand_card_rects[i]
             if rect.right > 0 and rect.left < SCREEN_WIDTH:
                 is_hovered = is_my_turn and not winner and rect.collidepoint(mouse_pos)
                 draw_card(screen, rect.x, rect.y, card_str, selected=is_hovered)
 
-        # Gambar tombol-tombol
         draw_button(screen, "Ambil Kartu", draw_button_rect, BLUE, WHITE, font=INFO_FONT)
-        # BARU: Gambar tombol UNO! jika kartu sisa 1
-        if len(hand) == 1:
-            draw_button(screen, "UNO!", uno_button_rect, RED, WHITE)
         if max_scroll > 0:
             draw_button(screen, "<", left_arrow_rect, GRAY, WHITE, font=INPUT_FONT)
             draw_button(screen, ">", right_arrow_rect, GRAY, WHITE, font=INPUT_FONT)
+        
+        my_status = player_statuses.get(player_id, {})
+        if my_status.get("count") == 1 and my_status.get("on_uno"):
+            draw_button(screen, "UNO!", uno_button_rect, RED, WHITE)
 
-        # BARU: Gambar status kartu lawan
-        opponent_y = 40
-        draw_text(screen, "Pemain Lain:", INFO_FONT, WHITE, (820, opponent_y))
-        opponent_y += 30
-        for pid, count in opponent_cards.items():
-            if pid != player_id:
-                text = f"- {pid}: {count} kartu"
-                draw_text(screen, text, MSG_FONT, WHITE, (820, opponent_y), align="topleft")
-                opponent_y += 25
-
+        draw_text(screen, "Pemain Lain:", INFO_FONT, WHITE, (SCREEN_WIDTH - 10, 20), align="topright")
+        opponent_y = 50
+        callout_buttons.clear()
+        if player_statuses:
+            for pid, p_status in player_statuses.items():
+                if pid != player_id:
+                    count = p_status.get("count", "?")
+                    is_on_uno = p_status.get("on_uno", False)
+                    text = f"{pid}: {count} kartu"
+                    draw_text(screen, text, MSG_FONT, WHITE, (SCREEN_WIDTH - 10, opponent_y), align="topright")
+                    if is_on_uno:
+                        text_width = MSG_FONT.size(text)[0]
+                        button_x = SCREEN_WIDTH - 10 - text_width - 10 - 50
+                        callout_rect = pygame.Rect(button_x, opponent_y - 3, 50, 24)
+                        draw_button(screen, "!", callout_rect, YELLOW, BLACK, font=MSG_FONT)
+                        callout_buttons.append((callout_rect, pid))
+                    opponent_y += 25
+        
         pygame.display.flip()
         clock.tick(30)
     
     if winner:
         time.sleep(5)
+
     pygame.quit()
 
 if __name__ == "__main__":
