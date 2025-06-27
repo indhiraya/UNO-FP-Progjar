@@ -283,9 +283,11 @@ def main():
                     draw_text(screen, text, MSG_FONT, WHITE, (SCREEN_WIDTH - 10, opponent_y), align="topright")
                     if is_on_uno:
                         text_width = MSG_FONT.size(text)[0]
-                        button_x = SCREEN_WIDTH - 10 - text_width - 10 - 50
-                        callout_rect = pygame.Rect(button_x, opponent_y - 3, 50, 24)
-                        draw_button(screen, "!", callout_rect, YELLOW, BLACK, font=MSG_FONT)
+                        uno_button_width = 80
+                        uno_button_height = 28
+                        button_x = SCREEN_WIDTH - 10 - text_width - 10 - uno_button_width
+                        callout_rect = pygame.Rect(button_x, opponent_y - 3, uno_button_width, uno_button_height)
+                        draw_button(screen, "UNO", callout_rect, RED, WHITE, font=MSG_FONT)
                         callout_buttons.append((callout_rect, pid))
                     opponent_y += 25
         
