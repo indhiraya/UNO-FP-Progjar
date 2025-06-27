@@ -145,7 +145,7 @@ class Game:
             next_player_id = self.turn_order[next_player_idx]
             self.players[next_player_id].draw_cards(self.deck, 2)
             self._update_player_uno_status(next_player_id)
-            self._move_to_next_player()
+            self._move_to_next_player(skip=2)
         elif value == "+4":
             played_card.color = new_color
             next_player_idx = (self.current_turn_index + self.direction) % len(self.turn_order)
