@@ -184,7 +184,7 @@ def main_game_loop(screen, player_name):
     message = ""
     state = None
     last_state_fetch = 0
-    polling_interval = 1.0  
+    polling_interval = 0.2  
 
     draw_button_rect = pygame.Rect(850, SCREEN_HEIGHT - 160, 120, 50)
     uno_button_rect = pygame.Rect(850, SCREEN_HEIGHT - 100, 120, 50)
