@@ -127,13 +127,46 @@ def ask_color_choice(screen):
     while choosing:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                return None
-            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-                return None
-            if event.type == pygame.MOUSEBUTTONDOWN:
-                for rect, color in rects:
-                    if rect.collidepoint(event.pos):
-                        return color
+                running = False
+
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                mouse_pos = event.pos
+
+                # Handle scroll kiri
+                if hand_offset > 0 and left_btn_rect.collidepoint(mouse_pos):
+                    hand_offset -= 1
+                    continue  # Skip ke event berikutnya
+
+                # Handle scroll kanan
+                if hand_offset + max_visible_cards < len(hand) and right_btn_rect.collidepoint(mouse_pos):
+                    hand_offset += 1
+                    continue  # Skip ke event berikutnya
+
+                if turn == player_name:
+                    for idx, rect in enumerate(card_rects):
+                        real_idx = idx + hand_offset
+                        if rect.collidepoint(mouse_pos):
+                            if selected_card_index == real_idx:
+                                card_to_play = hand[real_idx]
+                                if "wild" in card_to_play.lower() or "+4" in card_to_play.lower():
+                                    chosen_color = ask_color_choice(screen)
+                                    if chosen_color is None:
+                                        message = "Batal memilih warna."
+                                        continue
+                                    command = f"play {player_name} {real_idx} {chosen_color}"
+                                else:
+                                    command = f"play {player_name} {real_idx}"
+
+                                response = send_command(command)
+                                if response.get("status") == "OK":
+                                    message = f"Berhasil main kartu {card_to_play}"
+                                    selected_card_index = None
+                                else:
+                                    message = f"Gagal main kartu: {response.get('message')}"
+                                    selected_card_index = None
+                            else:
+                                selected_card_index = real_idx
+                
 
 def name_entry_scene(screen):
     player_name = ""
@@ -186,8 +219,11 @@ def main_game_loop(screen, player_name):
     last_state_fetch = 0
     polling_interval = 0.2  
 
-    draw_button_rect = pygame.Rect(850, SCREEN_HEIGHT - 160, 120, 50)
-    uno_button_rect = pygame.Rect(850, SCREEN_HEIGHT - 100, 120, 50)
+    draw_button_rect = pygame.Rect(850, SCREEN_HEIGHT - 660, 120, 50)
+    uno_button_rect = pygame.Rect(850, SCREEN_HEIGHT - 600, 120, 50)
+
+    hand_offset = 0           # Tambahkan ini
+    max_visible_cards = 8     # Tambahkan ini
 
     running = True
     while running:
@@ -222,11 +258,17 @@ def main_game_loop(screen, player_name):
             clock.tick(30)
             continue
 
+        # hand = state.get("hand", [])
+        # top_card = state.get("top_card", "")
+        # turn = state.get("current_turn", "")
+        # last_action_message = state.get("last_action_message", "")
+        # can_declare_uno = state.get("can_declare_uno", False)
+
         hand = state.get("hand", [])
         top_card = state.get("top_card", "")
         turn = state.get("current_turn", "")
         last_action_message = state.get("last_action_message", "")
-        can_declare_uno = state.get("can_declare_uno", False)
+        can_declare_uno = state.get("can_declare_uno", False)        
 
         draw_text(screen, f"Nama: {player_name}", INFO_FONT, WHITE, (20, 20), "topleft")
         draw_text(screen, f"Giliran: {turn}", INFO_FONT, WHITE, (20, 50), "topleft")
@@ -234,15 +276,35 @@ def main_game_loop(screen, player_name):
         draw_text(screen, f"Pesan: {last_action_message}", INFO_FONT, WHITE, (SCREEN_WIDTH / 2, 20), "center")
 
         if top_card:
-            draw_card(screen, 20, 100, top_card)
+            draw_card(screen, 20, 110, top_card)
+
+        # hand_start_x = 20
+        # hand_y = SCREEN_HEIGHT - CARD_HEIGHT - 60
+        # card_rects = []
+        # for idx, card in enumerate(hand):
+        #     x = hand_start_x + idx * (CARD_WIDTH + CARD_MARGIN)
+        #     rect = draw_card(screen, x, hand_y, card, selected=(idx == selected_card_index))
+        #     card_rects.append(rect)
 
         hand_start_x = 20
+        visible_hand = hand[hand_offset:hand_offset+max_visible_cards]
+        num_visible = len(visible_hand)
+        total_width = num_visible * CARD_WIDTH + (num_visible - 1) * CARD_MARGIN
+        hand_start_x = (SCREEN_WIDTH - total_width) // 2  # Pusatkan kartu
         hand_y = SCREEN_HEIGHT - CARD_HEIGHT - 60
         card_rects = []
-        for idx, card in enumerate(hand):
+        for idx, card in enumerate(visible_hand):
             x = hand_start_x + idx * (CARD_WIDTH + CARD_MARGIN)
-            rect = draw_card(screen, x, hand_y, card, selected=(idx == selected_card_index))
+            rect = draw_card(screen, x, hand_y, card, selected=(idx + hand_offset == selected_card_index))
             card_rects.append(rect)
+
+        # Tombol scroll kiri-kanan
+        left_btn_rect = pygame.Rect(hand_start_x - 50, hand_y + CARD_HEIGHT//2 - 25, 40, 50)
+        right_btn_rect = pygame.Rect(hand_start_x + num_visible * (CARD_WIDTH + CARD_MARGIN), hand_y + CARD_HEIGHT//2 - 25, 40, 50)
+        if hand_offset > 0:
+            draw_button(screen, "<", left_btn_rect, GRAY, BLACK)
+        if hand_offset + max_visible_cards < len(hand):
+            draw_button(screen, ">", right_btn_rect, GRAY, BLACK)
 
         draw_button(screen, "Draw Card", draw_button_rect, BLUE, WHITE)
         draw_button(screen, "UNO", uno_button_rect, GREEN if state.get("can_press_uno", False) else GRAY, WHITE)
@@ -257,19 +319,30 @@ def main_game_loop(screen, player_name):
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 mouse_pos = event.pos
 
+                # Handle scroll kiri
+                if hand_offset > 0 and left_btn_rect.collidepoint(mouse_pos):
+                    hand_offset -= 1
+                    continue
+
+                # Handle scroll kanan
+                if hand_offset + max_visible_cards < len(hand) and right_btn_rect.collidepoint(mouse_pos):
+                    hand_offset += 1
+                    continue
+
                 if turn == player_name:
                     for idx, rect in enumerate(card_rects):
+                        real_idx = idx + hand_offset
                         if rect.collidepoint(mouse_pos):
-                            if selected_card_index == idx:
-                                card_to_play = hand[idx]
+                            if selected_card_index == real_idx:
+                                card_to_play = hand[real_idx]
                                 if "wild" in card_to_play.lower() or "+4" in card_to_play.lower():
                                     chosen_color = ask_color_choice(screen)
                                     if chosen_color is None:
                                         message = "Batal memilih warna."
                                         continue
-                                    command = f"play {player_name} {idx} {chosen_color}"
+                                    command = f"play {player_name} {real_idx} {chosen_color}"
                                 else:
-                                    command = f"play {player_name} {idx}"
+                                    command = f"play {player_name} {real_idx}"
 
                                 response = send_command(command)
                                 if response.get("status") == "OK":
@@ -279,7 +352,7 @@ def main_game_loop(screen, player_name):
                                     message = f"Gagal main kartu: {response.get('message')}"
                                     selected_card_index = None
                             else:
-                                selected_card_index = idx
+                                selected_card_index = real_idx
 
                 if draw_button_rect.collidepoint(mouse_pos) and turn == player_name:
                     response = send_command(f"draw {player_name}")
