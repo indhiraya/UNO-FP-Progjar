@@ -1,3 +1,4 @@
+# logic.py
 import random
 
 class Game:
@@ -5,192 +6,176 @@ class Game:
         self.players = {}
         self.turn_order = []
         self.current_turn_index = 0
-        self.deck = self.create_deck()
+        self.direction = 1
+        self.deck = self._create_deck()
         self.discard_pile = []
-        self.started = False
         self.winner = None
         self.last_action_message = ""
+        self.players_on_uno = set()
+        self.safe_from_call_out = set()
+        self._start_game_setup()
 
-    def create_deck(self):
+    def _create_deck(self):
         colors = ["red", "green", "blue", "yellow"]
-        values = [str(n) for n in range(0, 10)] + ["Skip", "Reverse", "+2"]
-        special = ["Wild", "+4"]
-        deck = [f"{color} {value}" for color in colors for value in values for _ in range(2)]
+        values = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "Skip", "Reverse", "Draw Two"]
+        special = ["Wild", "Wild Draw Four"]
+        deck = [f"{color} {value}" for color in colors for value in values]
+        deck += [f"{color} {v}" for color in colors for v in values if v != '0']
         deck += [f"black {s}" for s in special for _ in range(4)]
         random.shuffle(deck)
         return deck
 
-    def draw_card_from_deck(self):
+    def _draw_card_from_deck(self):
         if not self.deck:
             if len(self.discard_pile) > 1:
                 self.deck = self.discard_pile[:-1]
                 random.shuffle(self.deck)
                 self.discard_pile = self.discard_pile[-1:]
             else:
-                return None  
-        return self.deck.pop() if self.deck else None
+                return "empty_deck"
+        return self.deck.pop()
+
+    def _start_game_setup(self):
+        first_card = self._draw_card_from_deck()
+        while "black" in first_card or any(action in first_card for action in ["Skip", "Reverse", "Draw"]):
+            self.deck.append(first_card)
+            random.shuffle(self.deck)
+            first_card = self._draw_card_from_deck()
+        self.discard_pile.append(first_card)
 
     def add_player(self, player_id):
         if player_id not in self.players:
-            hand = [self.draw_card_from_deck() for _ in range(7)]
+            hand = [self._draw_card_from_deck() for _ in range(7)]
             self.players[player_id] = {"hand": hand, "uno_declared": False}
             self.turn_order.append(player_id)
-            if not self.discard_pile:
-                first_card = self.draw_card_from_deck()
-                attempts = 0
-                while first_card.startswith("black") and attempts < 10:
-                    self.deck.insert(0, first_card)
-                    first_card = self.draw_card_from_deck()
-                    attempts += 1
-                self.discard_pile.append(first_card)
-            if len(self.turn_order) >= 2 and self.current_turn_index == 0 and not self.started:
-                self.started = True
-                self.current_turn_index = 0
-                self.last_action_message = f"Game started! Turn: {self.get_current_player()}"
+            self.last_action_message = f"{player_id} telah bergabung."
 
     def has_player(self, player_id):
         return player_id in self.players
 
-    def get_current_player(self):
-        if not self.turn_order:
-            return None
-        return self.turn_order[self.current_turn_index % len(self.turn_order)]
+    def _get_current_player_id(self):
+        return self.turn_order[self.current_turn_index] if self.turn_order else None
+
+    def _get_player_statuses(self):
+        statuses = {}
+        for pid, data in self.players.items():
+            is_on_uno_vulnerable = pid in self.players_on_uno and not self.players[pid].get("uno_declared", False)
+            statuses[pid] = {"count": len(data["hand"]), "on_uno": is_on_uno_vulnerable}
+        return statuses
 
     def get_full_game_state(self, player_id):
-        if player_id not in self.players:
+        if not self.has_player(player_id):
             return {"status": "ERROR", "message": "Player not found"}
         return {
             "status": "OK",
             "hand": self.players[player_id]["hand"],
             "top_card": self.discard_pile[-1] if self.discard_pile else "",
-            "your_turn": self.get_current_player() == player_id,
-            "current_turn": self.get_current_player(),
+            "your_turn": self._get_current_player_id() == player_id,
+            "current_turn": self._get_current_player_id(),
             "winner": self.winner,
             "last_action_message": self.last_action_message,
-            "can_declare_uno": len(self.players[player_id]["hand"]) == 1 and self.get_current_player() == player_id,
-            "can_press_uno": any(len(data["hand"]) == 1 for data in self.players.values()),
-            "others": {
-                pid: len(data["hand"])
-                for pid, data in self.players.items()
-                if pid != player_id
-            }
+            "player_statuses": self._get_player_statuses()
         }
-    
-    def can_play_wild_draw_four(self, player_id, index):
-        hand = self.players[player_id]["hand"]
-        top = self.discard_pile[-1]
-        top_color, top_val = top.split(" ", 1)
-        for i, card in enumerate(hand):
-            if i == index:
-                continue
-            color, val = card.split(" ", 1)
-            if color == top_color or val == top_val:
-                return False
-        return True
 
-    def play_card(self, player_id, index, new_color=None):
-        if self.get_current_player() != player_id:
-            return {"status": "ERROR", "message": "Not your turn"}
-
-        hand = self.players[player_id]["hand"]
-        if index >= len(hand):
-            return {"status": "ERROR", "message": "Invalid card index"}
-
-        played = hand[index]
-        top = self.discard_pile[-1]
-        played_color, played_val = played.split(" ", 1)
-        top_color, top_val = top.split(" ", 1)
-
-        if played_color == "black":
-            if not new_color or new_color not in ["red", "yellow", "green", "blue"]:
-                return {"status": "ERROR", "message": "You must choose a color for Wild"}
-
-            if played_val == "+4":
-                if not self.can_play_wild_draw_four(player_id, index):
-                    return {
-                        "status": "ERROR",
-                        "message": "You cannot play Wild Draw Four if you have a matching color or value"
-                    }
-            played = f"{new_color} {played_val}"
-            original_played = played 
-        elif played_color != top_color and played_val != top_val:
-            return {"status": "ERROR", "message": "Card does not match color or value"}
+    def _update_player_uno_status(self, player_id):
+        hand_size = len(self.players[player_id]["hand"])
+        if hand_size == 1:
+            self.players_on_uno.add(player_id)
         else:
-            original_played = played
-
-        self.discard_pile.append(played)
-        del hand[index]
-
-        skip_extra = False
-        if played_val == "Skip":
-            skip_extra = True
-        elif played_val == "Reverse":
-            if len(self.turn_order) == 2:
-                skip_extra = True  
-            else:
-                self.turn_order.reverse()
-                self.current_turn_index = len(self.turn_order) - self.current_turn_index - 1
-        elif played_val == "+2":
-            next_player_index = (self.current_turn_index + 1) % len(self.turn_order)
-            next_player = self.turn_order[next_player_index]
-            new_cards = [self.draw_card_from_deck() for _ in range(2)]
-            self.players[next_player]["hand"] += [card for card in new_cards if card]
-            skip_extra = True
-        elif played_val == "+4":
-            next_player_index = (self.current_turn_index + 1) % len(self.turn_order)
-            next_player = self.turn_order[next_player_index]
-            self.players[next_player]["hand"] += [self.draw_card_from_deck() for _ in range(4)]
-            skip_extra = True
-        
-        if not hand:
-            if not self.players[player_id]["uno_declared"]:
-                self.players[player_id]["hand"] += [self.draw_card_from_deck() for _ in range(2)]
-                self.last_action_message = f"{player_id} did not declare UNO! +2 cards"
-            else:
-                self.winner = player_id
-
-        self.last_action_message = f"{player_id} played {original_played}"
-
-        self.advance_turn()
-        if skip_extra:
-            self.advance_turn()
-
-        return {"status": "OK"}
-
-    def draw_card(self, player_id):
-        if self.get_current_player() != player_id:
-            return {"status": "ERROR", "message": "Not your turn"}
-        card = self.draw_card_from_deck()
-        if card:
-            self.players[player_id]["hand"].append(card)
-        self.last_action_message = f"{player_id} drew a card"
-        self.advance_turn()
-        return {"status": "OK"}
-    
-    def press_uno_button(self, player_id):
-        candidates = [pid for pid, data in self.players.items() if len(data["hand"]) == 1]
-
-        if not candidates:
-            return {"status": "ERROR", "message": "No player is eligible for UNO"}
-
-        if player_id in candidates:
-            self.players[player_id]["uno_declared"] = True
-            self.last_action_message = f"{player_id} declared UNO!"
-            return {"status": "OK", "message": "UNO declared!"}
-        else:
-            target = candidates[0]  
-            self.players[target]["hand"] += [self.draw_card_from_deck() for _ in range(2)]
-            self.last_action_message = f"{target} failed to declare UNO in time! +2 cards"
-            return {"status": "OK", "message": f"{target} did not declare UNO in time! +2 cards"}
+            self.players_on_uno.discard(player_id)
 
     def declare_uno(self, player_id):
         if len(self.players[player_id]["hand"]) == 1:
             self.players[player_id]["uno_declared"] = True
-            return {"status": "OK", "message": "UNO declared!"}
+            self.last_action_message = f"{player_id} menyatakan UNO!"
+            return {"status": "OK"}
+        else:
+            self.players[player_id]["hand"].append(self._draw_card_from_deck())
+            self.last_action_message = f"{player_id} salah menyatakan UNO, +1 kartu!"
+            return {"status": "ERROR", "message": "Pinalti salah UNO!"}
 
-    def advance_turn(self):
-        self.current_turn_index = (self.current_turn_index + 1) % len(self.turn_order)
-        current_player = self.get_current_player()
-        for pid in self.players:
-            if pid != current_player:
-                self.players[pid]["uno_declared"] = False
+    def call_out_player(self, caller_id, target_id):
+        target_data = self.players.get(target_id)
+        if target_data and len(target_data["hand"]) == 1 and not target_data["uno_declared"]:
+            target_data["hand"] += [self._draw_card_from_deck() for _ in range(2)]
+            self.last_action_message = f"{caller_id} menantang {target_id}! {target_id} menarik 2 kartu."
+            self._update_player_uno_status(target_id)
+        else:
+            self.players[caller_id]["hand"].append(self._draw_card_from_deck())
+            self.last_action_message = f"Tantangan {caller_id} pada {target_id} gagal, +1 kartu!"
+            self._update_player_uno_status(caller_id)
+        return {"status": "OK"}
+
+    def _advance_turn(self):
+        # Reset status uno_declared untuk pemain yang baru saja menyelesaikan gilirannya
+        prev_player_id = self._get_current_player_id()
+        if prev_player_id:
+            self.players[prev_player_id]["uno_declared"] = False
+
+        if not self.turn_order: return
+        self.current_turn_index = (self.current_turn_index + self.direction) % len(self.turn_order)
+
+    def _apply_card_effects(self, played_val, new_color=None):
+        skip_turn = False
+        if played_val == "Skip":
+            skip_turn = True
+        elif played_val == "Reverse":
+            if len(self.players) == 2: skip_turn = True
+            else: self.direction *= -1
+        elif played_val == "Draw Two":
+            next_player_idx = (self.current_turn_index + self.direction) % len(self.turn_order)
+            next_player = self.turn_order[next_player_idx]
+            self.players[next_player]["hand"] += [self._draw_card_from_deck() for _ in range(2)]
+            self._update_player_uno_status(next_player)
+            skip_turn = True
+        elif played_val == "Wild Draw Four":
+            next_player_idx = (self.current_turn_index + self.direction) % len(self.turn_order)
+            next_player = self.turn_order[next_player_idx]
+            self.players[next_player]["hand"] += [self._draw_card_from_deck() for _ in range(4)]
+            self._update_player_uno_status(next_player)
+            skip_turn = True
+        
+        self._advance_turn()
+        if skip_turn:
+            self._advance_turn()
+
+    def play_card(self, player_id, index, new_color=None):
+        if self.winner or self._get_current_player_id() != player_id: return {"status": "ERROR", "message":"Bukan giliranmu"}
+        hand = self.players[player_id]["hand"]
+        if index >= len(hand): return {"status": "ERROR", "message":"Index kartu tidak valid"}
+        
+        played_str, top_str = hand[index], self.discard_pile[-1]
+        played_color, played_val = played_str.split(" ", 1)
+        top_color, top_val = top_str.split(" ", 1)
+        is_match = (played_color == "black") or (played_color == top_color) or (played_val == top_val)
+
+        if not is_match: return {"status": "ERROR", "message":"Kartu tidak cocok"}
+        
+        del hand[index]
+        card_to_discard = played_str
+        if played_color == "black":
+            if not new_color: return {"status": "ERROR", "message":"Harus pilih warna"}
+            card_to_discard = f"{new_color} {played_val}"
+
+        self.discard_pile.append(card_to_discard)
+        self.last_action_message = f"{player_id} memainkan {played_str}."
+        
+        self._update_player_uno_status(player_id)
+
+        if not hand:
+            self.winner = player_id
+            self.last_action_message = f"🎉 {player_id} MENANG! 🎉"
+        else:
+            self._apply_card_effects(played_val, new_color)
+
+        return {"status": "OK"}
+
+    def draw_card(self, player_id):
+        if self.winner or self._get_current_player_id() != player_id: return {"status": "ERROR", "message":"Bukan giliranmu"}
+        card = self._draw_card_from_deck()
+        if card:
+            self.players[player_id]["hand"].append(card)
+            self.last_action_message = f"{player_id} menarik kartu."
+            self._update_player_uno_status(player_id)
+        self._advance_turn()
+        return {"status": "OK"}

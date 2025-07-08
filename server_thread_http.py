@@ -20,23 +20,21 @@ class ProcessTheClient(threading.Thread):
 			try:
 				data = self.connection.recv(1024)
 				if data:
-
 					#merubah input dari socket (berupa bytes) ke dalam string
 					#agar bisa mendeteksi \r\n
 					d = data.decode()
 					rcv=rcv+d
 					if '\r\n\r\n' in rcv:
 						#end of command, proses string
-						header_end = rcv.find('\r\n\r\n')
-						headers = rcv[:header_end]
-						body = rcv[header_end+4:].strip()
-						logging.warning("Header dari client:\n{}".format(headers))
-						logging.warning("Body dari client (command): {}".format(body))
+						logging.warning("data dari client: {}" . format(rcv))
 						hasil = httpserver.proses(rcv)
-						hasil = hasil + "\r\n\r\n".encode()
-						logging.warning("balas ke client: {}".format(hasil))
+						#hasil akan berupa bytes
+						#untuk bisa ditambahi dengan string, maka string harus di encode
+						hasil=hasil+"\r\n\r\n".encode()
+						logging.warning("balas ke  client: {}" . format(hasil))
+						#hasil sudah dalam bentuk bytes
 						self.connection.sendall(hasil)
-						rcv = ""
+						rcv=""
 						self.connection.close()
 				else:
 					break
@@ -53,7 +51,7 @@ class Server(threading.Thread):
 
 	def run(self):
 		self.my_socket.bind(('0.0.0.0', 8889))
-		self.my_socket.listen(10)
+		self.my_socket.listen(1)
 		while True:
 			self.connection, self.client_address = self.my_socket.accept()
 			logging.warning("connection from {}".format(self.client_address))
